@@ -9,7 +9,7 @@ namespace ExpertSystem
     public partial class Form1 : Form
     {
         private ISet<string> facts;
-        private ISet<string> sellectedFacts = new HashSet<string>();
+        private ISet<string> selectedFacts = new HashSet<string>();
         private IList<Rule> rules;
 
         public Form1()
@@ -40,13 +40,9 @@ namespace ExpertSystem
             foreach (var rule in rules)
             {
                 foreach (var antecedent in rule.Antecedents)
-                    if (Char.IsLower(antecedent[0]))
-                        facts.Add(antecedent);
-
-                if (Char.IsLower(rule.Consequent[0]))
-                    facts.Add(rule.Consequent);
+                    facts.Add(antecedent);
+                facts.Add(rule.Consequent);
             }
-
             var factsList = facts.ToList();
             factsList.Sort();
             listBox1.DataSource = factsList;
@@ -60,11 +56,11 @@ namespace ExpertSystem
                 return;
             var fact = (string)listBox1.SelectedItem;
             facts.Remove(fact);
-            sellectedFacts.Add(fact);
+            selectedFacts.Add(fact);
             var factsList = facts.ToList();
             factsList.Sort();
             listBox1.DataSource = factsList;
-            listBox3.DataSource = sellectedFacts.ToList();
+            listBox3.DataSource = selectedFacts.ToList();
             comboBox1.DataSource = factsList;
         }
 
@@ -73,20 +69,17 @@ namespace ExpertSystem
             if (null == listBox3.SelectedItem)
                 return;
             var fact = (string)listBox3.SelectedItem;
-            sellectedFacts.Remove(fact);
+            selectedFacts.Remove(fact);
             facts.Add(fact);
             var factsList = facts.ToList();
             factsList.Sort();
             listBox1.DataSource = factsList;
-            listBox3.DataSource = sellectedFacts.ToList();
+            listBox3.DataSource = selectedFacts.ToList();
             comboBox1.DataSource = factsList;
         }
 
-
-        private class Node : IEquatable<Node>
+        private class Node
         {
-            
-
             public ISet<string> Set { get; set; }
             public Node Parent { get; set; }
             public Rule Rule { get; set; }
@@ -100,93 +93,105 @@ namespace ExpertSystem
 
             public override bool Equals(object obj)
             {
-                if (null == obj || !(obj is Node))
-                    return false;
-                var node = (Node)obj;
-                return Equals(node);
+                var node = obj as Node;
+                if (null == node) return false;
+                return Set.SetEquals(node.Set);
             }
 
             public override int GetHashCode()
             {
-                if (Set == null)
-                    return 0;
-
-                int hash = 0;
-
-                foreach (var s in Set)
-                    hash ^= s.GetHashCode();
-                return hash;
-            }
-
-            public bool Equals(Node other)
-            {
-                if (null == other)
-                    return false;
-                bool t = (Set == null && other.Set == null) || 
-                    ((Set != null && other.Set != null) && Set.SetEquals(other.Set));
-                return t;
+                return Set
+                    .Select(s => s.GetHashCode())
+                    .Aggregate((a, b) => a ^ b);
             }
         }
 
-
         private void button3_Click(object sender, EventArgs e)
         {
-            ISet<Node> current = new HashSet<Node>();
-            current.Add(new Node(sellectedFacts, null, null));
-            
+            var currentSet = new HashSet<Node>();
+            currentSet.Add(new Node(selectedFacts, null, null));
             Node targetNode = null;
             while (targetNode == null)
             {
-                ISet<Node> next = new HashSet<Node>();
-                
-                foreach (var node in current)
-                {
+                var nextSet = new HashSet<Node>();
+                foreach (var node in currentSet)
                     foreach (var rule in rules)
                     {
-                        bool skip = false;
-
-                        foreach (var elem in rule.Antecedents)
-                            if (!node.Set.Contains(elem))
-                            {
-                                skip = true;
-                                break;
-                            }
-
-                        if (!skip)
-                        {
-                            
-                            Node addNode = new Node(new HashSet<string>(node.Set), node, rule);
-                            addNode.Set.Add(rule.Consequent);
-                            
-                            next.Add(addNode);
-                            
-                            if (addNode.Set.Contains(comboBox1.SelectedItem))
-                                targetNode = addNode;
-                            
-                        }
+                        if (rule.Antecedents.Any(fact => !node.Set.Contains(fact)))
+                            continue;
+                        var addNode = new Node(new HashSet<string>(node.Set), node, rule);
+                        addNode.Set.Add(rule.Consequent);
+                        nextSet.Add(addNode);
+                        if (addNode.Set.Contains(comboBox1.SelectedItem))
+                            targetNode = addNode;
                     }
-                }
-                
-                if (!current.SetEquals(next))
-                    current = next;
-                else
-                {
-                    MessageBox.Show("Life is pain :(");
-                    return;
-                }
+                if (currentSet.SetEquals(nextSet))
+                    break;
+                currentSet = nextSet;
             }
-
-            IList<Rule> inference = new List<Rule>();
-            while(targetNode.Parent != null)
+            if (null == targetNode)
+            {
+                MessageBox.Show("Вывод невозможен");
+                return;
+            }
+            var inference = new List<Rule>();
+            while (null != targetNode.Parent)
             {
                 inference.Add(targetNode.Rule);
                 targetNode = targetNode.Parent;
             }
             inference.Reverse();
             listBox4.DataSource = inference;
+        }
 
-            MessageBox.Show("It's ok :)");
-
+        private void button4_Click(object sender, EventArgs e)
+        {
+            var currentSet = new HashSet<Node>();
+            var initial= new HashSet<string>();
+            initial.Add((string)comboBox1.SelectedItem);
+            currentSet.Add(new Node(initial, null, null));
+            Node sourceNode = null;
+            while (true)
+            {
+                var nextSet = new HashSet<Node>();
+                foreach (var node in currentSet)
+                {
+                    var activeRules = rules
+                        .Where(r =>
+                            !selectedFacts.Contains(r.Consequent) && 
+                            node.Set.Contains(r.Consequent));
+                    foreach (var r in activeRules)
+                    {
+                        var set = new HashSet<string>(node.Set);
+                        set.Remove(r.Consequent);
+                        foreach (var f in r.Antecedents)
+                            set.Add(f);
+                        var newNode = new Node(set, node, r);
+                        nextSet.Add(newNode);
+                        if (selectedFacts.All(f => set.Contains(f)))
+                        {
+                            sourceNode = newNode;
+                            goto found;
+                        }
+                    }
+                }
+                if (currentSet.SetEquals(nextSet))
+                    break;
+                currentSet = nextSet;
+            }
+        found:
+            if (null == sourceNode)
+            {
+                MessageBox.Show("Вывод невозможен");
+                return;
+            }
+            var inference = new List<Rule>();
+            while (null != sourceNode.Parent)
+            {
+                inference.Add(sourceNode.Rule);
+                sourceNode = sourceNode.Parent;
+            }
+            listBox4.DataSource = inference;
         }
     }
 }

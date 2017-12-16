@@ -168,7 +168,7 @@ namespace ExpertSystem
                             set.Add(f);
                         var newNode = new Node(set, node, r);
                         nextSet.Add(newNode);
-                        if (selectedFacts.All(f => set.Contains(f)))
+                        if (set.All(f => selectedFacts.Contains(f)))
                         {
                             sourceNode = newNode;
                             goto found;

@@ -22,10 +22,14 @@ namespace ExpertSystem
             var rules = new List<Rule>(text.Length);
             foreach (var line in text)
             {
-                int arrowIndex = line.IndexOf("->");
-                var left = line.Substring(0, arrowIndex).Split(',').Select(s => s.Trim()).ToList();
-                var right = line.Substring(arrowIndex + 2).Trim();
-                rules.Add(new Rule(left, right));
+                string substr = line.Substring(line.LastIndexOf(' '));
+                double k = double.Parse(substr.Trim());
+                string temp = line.Substring(0, line.Length - substr.Length); 
+
+                int arrowIndex = temp.IndexOf("->");
+                var left = temp.Substring(0, arrowIndex).Split(',').Select(s => s.Trim()).ToList();
+                var right = temp.Substring(arrowIndex + 2).Trim();
+                rules.Add(new Rule(left, right, k));
             }
             return rules;
         }
@@ -135,6 +139,7 @@ namespace ExpertSystem
                 return;
             }
             var inference = new List<Rule>();
+            MessageBox.Show("Вывод с вероятностью " + targetNode.Rule.K.ToString());
             while (null != targetNode.Parent)
             {
                 inference.Add(targetNode.Rule);
@@ -185,6 +190,7 @@ namespace ExpertSystem
                 MessageBox.Show("Вывод невозможен");
                 return;
             }
+            MessageBox.Show("Вывод с вероятностью " + sourceNode.Rule.K.ToString());
             var inference = new List<Rule>();
             while (null != sourceNode.Parent)
             {
